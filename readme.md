@@ -22,6 +22,10 @@ To evaluate a distilled set with a finite network trained with SGD on mnist, wit
 
 ```python3 eval_distilled_set.py --dataset mnist --save_path path/to/directory --run_finite --lr 1e-3 --weight_decay 1e-3 --label_scale 8` --centering ```
 
+To automatically load the set of training hyperparameters used for finite training results in the paper, use the command "--use_best_hypers", i.e.
+
+```python3 eval_distilled_set.py --dataset cifar10 --save_path path/to/directory --run_finite --use_best_hypers ```
+
 utils.py contains the best hyperparameters for finite network training
 
 To use the empirical NNGP for inference on fashion-mnist:

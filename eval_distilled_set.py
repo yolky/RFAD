@@ -42,6 +42,7 @@ def main():
     parser.add_argument('--identifier', type = str, default = '')
     parser.add_argument('--centering', action='store_true')
     parser.add_argument('--no_kernel_save', action='store_true')
+    parser.add_argument('--use_best_hypers', action='store_true')
 
     args = parser.parse_args()
 
@@ -104,7 +105,6 @@ def main():
     support_set = np.load('{}/{}.npz'.format(args.save_path, args.epoch))
     X_sup = support_set['images']
     y_sup = support_set['labels']
-    # print(y_sup)
     # print(support_set['k'])
     jit = support_set.get('jit', 5e-3)
     
@@ -123,18 +123,23 @@ def main():
     
     if args.run_finite:
         file_print("Running finite results")
+
+        if(args.use_best_hypers):
+            args.centering = True
+            args.lr, args.label_scale, args.weight_decay = utils.get_best_finite_hypers(args.dataset, X_sup.shape[0]//n_classes, use_label_scale = True)
+            print(f"Loading best set of hyperparameters for {args.dataset}, {X_sup.shape[0]//n_classes}:")
+            print(f"Learning rate: {args.lr}, label scale: {args.label_scale}, weight decay: {args.weight_decay}")
             
         output_file.write("\n")
         output_file.flush()
-        model, model_init, valid_acc = train_network(torch.tensor(X_sup).cuda(), torch.tensor(y_sup).cuda(), X_valid, y_valid, args.net_width, 20000, args.lr, args.weight_decay, args.loss_mode, args.centering, patience = 500, batch_size = 513, hung_factor = args.label_scale, seed = args.valid_seed, net_norm = 'none')
+        model, model_init, valid_acc = train_network(torch.tensor(X_sup).cuda(), torch.tensor(y_sup).cuda(), X_valid, y_valid, args.net_width, 20000, args.lr, args.weight_decay, args.loss_mode, args.centering, patience = 500, batch_size = 513, label_scale_factor = args.label_scale, seed = args.valid_seed, net_norm = 'none')
         test_acc, test_predictions = get_acc(model, model_init, X_test, y_test, return_predictions = True, centering = args.centering)
-        print(test_predictions.shape)
         file_print("Centering: {}, loss_mode: {}, lr: {}, weight_decay: {}, label_scale: {}, valid_acc: {}, test_acc: {}\n".format(args.centering, args.loss_mode, args.lr, args.weight_decay, args.label_scale, valid_acc, test_acc))
         
         if len(args.identifier) > 0:
-            np.savez('{}/eval_finite_centering_{}_loss_{}_lr_{}_wd_{}_ls_{}_{}.npz'.format(args.save_path, args.centering, args.loss_mode, args.lr, args.weight_decay, args.label_scale, args.identifier), valid_acc = valid_acc.item(), test_acc = test_acc.item(), test_predictions = test_predictions)        
+            np.savez('{}/eval_finite_centering_{}_loss_{}_lr_{}_wd_{}_ls_{}_{}.npz'.format(args.save_path, args.centering, args.loss_mode, args.lr, args.weight_decay, args.label_scale, args.identifier), valid_acc = valid_acc, test_acc = test_acc, test_predictions = test_predictions)        
         else:
-            np.savez('{}/eval_finite_centering_{}_loss_{}_lr_{}_wd_{}_ls_{}.npz'.format(args.save_path, args.centering, args.loss_mode, args.lr, args.weight_decay, args.label_scale), valid_acc = valid_acc.item(), test_acc = test_acc.item(), test_predictions = test_predictions)        
+            np.savez('{}/eval_finite_centering_{}_loss_{}_lr_{}_wd_{}_ls_{}.npz'.format(args.save_path, args.centering, args.loss_mode, args.lr, args.weight_decay, args.label_scale), valid_acc = valid_acc, test_acc = test_acc, test_predictions = test_predictions)        
             
             
     if args.run_krr:
@@ -146,7 +151,8 @@ def main():
         KERNEL_FN = functools.partial(kernel_fn, get=('nngp', 'ntk'))
         
         kernel_batch_size = 25 if X_sup.shape[0]%25 == 0 else 20
-        KERNEL_FN = nt.utils.batch.batch(KERNEL_FN, batch_size=kernel_batch_size)
+        # KERNEL_FN = nt.utils.batch.batch(KERNEL_FN, batch_size=kernel_batch_size)
+        KERNEL_FN = nt.batch(KERNEL_FN, batch_size=kernel_batch_size)
         
         X_sup_reordered = np.transpose(X_sup, [0,2,3,1])
             
